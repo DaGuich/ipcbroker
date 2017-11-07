@@ -1,1 +1,2 @@
 # Python IPC-Broker
+[![Codacy Badge](https://api.codacy.com/project/badge/Grade/a58ccc60625b437491ff5e523cad3f65)](https://www.codacy.com/app/matthias.gilch.mg/ipcbroker?utm_source=github.com&amp;utm_medium=referral&amp;utm_content=DaGuich/ipcbroker&amp;utm_campaign=Badge_Grade)
