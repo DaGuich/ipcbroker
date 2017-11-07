@@ -1,1 +1,1 @@
-# ipcbroker
+# Python IPC-Broker
