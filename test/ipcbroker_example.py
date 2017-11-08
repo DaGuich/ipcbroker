@@ -26,7 +26,8 @@ class ClientAProcess(multiprocessing.Process):
         print(self.client.add(4, 2))
         time.sleep(10)
 
-    def sub(self):
+    @staticmethod
+    def sub():
         def method(a, b):
             return a - b
         return method
@@ -43,7 +44,8 @@ class ClientBProcess(multiprocessing.Process):
         while not self.next_event.is_set():
             self.client.work()
 
-    def add(self):
+    @staticmethod
+    def add():
         def method(a, b):
             return a + b
         return method

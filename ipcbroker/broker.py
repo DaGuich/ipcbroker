@@ -1,4 +1,3 @@
-from time import time
 from threading import Lock
 from multiprocessing import Pipe
 from multiprocessing.connection import Connection
@@ -49,7 +48,7 @@ class Broker(Threaded):
                             self.__return_queue.put((recv_con, message))
                         else:
                             self.__message_queue.put((recv_con, message))
-                    except (EOFError, OSError) as e:
+                    except (EOFError, OSError):
                         break
 
         # process messages in queue
