@@ -1,4 +1,5 @@
 from queue import Queue
+from threading import Lock
 
 from ipcbroker.broker import Broker
 from ipcbroker.message import Message
@@ -15,6 +16,8 @@ class Client:
         self.__broker_con = broker.register_client()
         self.__message_queue = Queue()
         self.__registered_funcs = dict()
+
+        self.__connection_lock = Lock()
 
     def __call__(self, name, *args, **kwargs):
         if name not in self.__registered_funcs:
@@ -34,8 +37,9 @@ class Client:
         # check if new message has arrived
         while self.__broker_con.poll(self.POLL_TIMEOUT):
             try:
-                message = self.__broker_con.recv()
-                self.__message_queue.put(message)
+                with self.__connection_lock:
+                    message = self.__broker_con.recv()
+                    self.__message_queue.put(message)
             except (EOFError, OSError):
                 pass
 
@@ -53,19 +57,20 @@ class Client:
         if not callable(callback):
             raise TypeError('Callback is not callable')
 
-        # send register request to broker
-        message = Message('register_function',
-                          name)
-        self.__broker_con.send(message)
+        with self.__connection_lock:
+            # send register request to broker
+            message = Message('register_function',
+                              name)
+            self.__broker_con.send(message)
 
-        # wait for response
-        return_message = self.__broker_con.recv()
-        while (
-            return_message.com_id != message.com_id and
-            return_message.action != 'return'
-        ):
-            self.__message_queue.put(return_message)
+            # wait for response
             return_message = self.__broker_con.recv()
+            while (
+                return_message.com_id != message.com_id and
+                return_message.action != 'return'
+            ):
+                self.__message_queue.put(return_message)
+                return_message = self.__broker_con.recv()
 
         # if response says OK return True otherwise False
         if return_message.payload == 'OK':
@@ -87,19 +92,20 @@ class Client:
             payload_dict = {'args': args,
                             'kwargs': kwargs}
 
-            # send request to broker
-            message = Message(name,
-                              payload_dict)
-            self.__broker_con.send(message)
+            with self.__connection_lock:
+                # send request to broker
+                message = Message(name,
+                                  payload_dict)
+                self.__broker_con.send(message)
 
-            # wait for response
-            return_message = self.__broker_con.recv()
-            while (
-                return_message.action != 'return' and
-                return_message.com_id != message.com_id
-            ):
-                self.__message_queue.put(return_message)
+                # wait for response
                 return_message = self.__broker_con.recv()
+                while (
+                    return_message.action != 'return' and
+                    return_message.com_id != message.com_id
+                ):
+                    self.__message_queue.put(return_message)
+                    return_message = self.__broker_con.recv()
 
             # return the payload
             return return_message.payload
