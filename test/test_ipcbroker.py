@@ -24,7 +24,7 @@ class IpcBrokerTestCase(TestCase):
 
     def test_client_parameter_not_broker(self):
         with self.assertRaises(TypeError):
-            client = Client('haha')
+            client = Client('example')
 
     def test_register_client(self):
         ca = Client(self.broker)
