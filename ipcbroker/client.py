@@ -82,12 +82,12 @@ class Client(Threaded):
                     raise Exception('No response')
                 return_message = self.__broker_con.recv()
 
-        # if response says OK return True otherwise False
-        if return_message.payload == 'OK':
-            self.__registered_funcs[name] = callback
-            return True
-        else:
-            return False
+            # if response says OK return True otherwise False
+            if return_message.payload == 'OK':
+                self.__registered_funcs[name] = callback
+                return True
+            else:
+                return False
 
     def __remote_call(self, name):
         """
