@@ -1,9 +1,6 @@
 from multiprocessing import Pipe
 from multiprocessing.connection import Connection
 from multiprocessing.connection import wait
-from threading import Lock
-from threading import Thread
-from time import sleep
 from queue import Queue
 
 from ipcbroker.message import Message
@@ -18,49 +15,25 @@ class Broker:
         self.__message_queue = Queue()
         self.__return_queue = Queue()
 
-        self.__thread = None
-        self.__thread_lock = Lock()
-        self.__thread_run = False
-
     def __del__(self):
-        if self.__thread is not None:
-            self.stop_loop()
         for con in self.__client_connections:
             con.close()
 
     def register_client(self):
+        """
+        Register a client at the broker
+
+        :return: a multiprocessing connection to communicate with the broker
+        """
         recv, send = Pipe(True)
-        with self.__thread_lock:
-            self.__client_connections.append(send)
+        self.__client_connections.append(send)
         return recv
 
-    def start_loop(self):
-        if self.__thread is not None and self.__thread.is_alive():
-            raise Exception('Thread already running')
-        self.__thread = Thread(target=self.__loop(),
-                               name='ipc-broker',
-                               daemon=False)
-        self._run_permission = True
-        self.__thread.start()
-
-    def stop_loop(self, timeout=5):
-        self._run_permission = False
-        try:
-            self.__thread.join(timeout)
-            self.__thread = None
-        except EOFError:
-            pass
-
-    def __loop(self):
-        def func():
-            while self._run_permission:
-                self.__poll()
-                sleep(0.01)
-        return func
-
     def __poll(self):
+        # read connections
         recv_cons = wait(self.__client_connections, self.POLL_TIMEOUT)
 
+        # fill message queue
         for recv_con in recv_cons:
             while recv_con.poll(self.POLL_TIMEOUT):
                 message = recv_con.recv()
@@ -69,30 +42,33 @@ class Broker:
                 else:
                     self.__message_queue.put((recv_con, message))
 
+        # process messages in queue
         while not self.__message_queue.empty():
             client, message = self.__message_queue.get()
-            if message.action == 'register_function':
-                self.__register_function(client, message)
-                continue
-            elif message.action == 'close':
-                self.__client_connections.remove(client)
-                return_message = Message('close',
-                                         None,
-                                         message.com_id)
-                client.send(return_message)
-                continue
-            self.__call_function(client, message)
+            self.__process_message(client, message)
+
+    def __process_message(self, client, message):
+        if message.action == 'register_function':
+            self.__register_function(client, message)
+            return
+        self.__call_function(client, message)
 
     def __register_function(self,
                             client: Connection,
                             message: Message):
+        # function name is in payload
         name = message.payload
+
+        # check if function is already registered
         if name in self.__registered_functions:
             exception = KeyError('Function already registered'),
             return_message = Message('return',
                                      exception,
                                      message.com_id)
             client.send(return_message)
+            return
+
+        # register function and send OK back
         self.__registered_functions[name] = client
         return_message = Message('return',
                                  'OK',
@@ -102,16 +78,24 @@ class Broker:
     def __call_function(self,
                         client: Connection,
                         message: Message):
+        # function name in action field
         name = message.action
+
+        # check if function is registered
         if name not in self.__registered_functions:
+            # send back KeyError (AttributeError better?)
             exception = KeyError('Function not registered')
             return_msg = Message('return',
                                  exception,
                                  message.com_id)
             client.send(return_msg)
+            return
 
+        # get the appropriate method connection and send the request
         func_client = self.__registered_functions[name]
         func_client.send(message)
+
+        # wait for return
         return_msg = func_client.recv()
         while (
             return_msg.com_id != message.com_id and
@@ -127,20 +111,16 @@ class Broker:
 
     @property
     def _run_permission(self):
-        with self.__thread_lock:
-            return self.__thread_run
+        return self.__thread_run
 
     @_run_permission.setter
     def _run_permission(self, value):
-        with self.__thread_lock:
-            self.__thread_run = value
+        self.__thread_run = value
 
     @property
     def n_clients(self):
-        with self.__thread_lock:
-            return len(self.__client_connections)
+        return len(self.__client_connections)
 
     @property
     def n_functions(self):
-        with self.__thread_lock:
-            return len(self.__registered_functions)
+        return len(self.__registered_functions)
