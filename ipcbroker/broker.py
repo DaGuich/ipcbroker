@@ -1,3 +1,4 @@
+from time import time
 from threading import Lock
 from multiprocessing import Pipe
 from multiprocessing.connection import Connection
@@ -5,22 +6,24 @@ from multiprocessing.connection import wait
 from queue import Queue
 
 from ipcbroker.message import Message
+from ipcbroker.threaded import Threaded
 
 
-class Broker:
+class Broker(Threaded):
     POLL_TIMEOUT = 0.1
 
-    def __init__(self):
+    def __init__(self,
+                 name=None):
+        if name is not None:
+            super().__init__(name=name)
+        else:
+            super().__init__()
         self.__client_connections = list()
         self.__registered_functions = dict()
         self.__message_queue = Queue()
         self.__return_queue = Queue()
 
         self.__connection_lock = Lock()
-
-    def __del__(self):
-        for con in self.__client_connections:
-            con.close()
 
     def register_client(self):
         """
@@ -40,11 +43,14 @@ class Broker:
             # fill message queue
             for recv_con in recv_cons:
                 while recv_con.poll(self.POLL_TIMEOUT):
-                    message = recv_con.recv()
-                    if message.action == 'return':
-                        self.__return_queue.put((recv_con, message))
-                    else:
-                        self.__message_queue.put((recv_con, message))
+                    try:
+                        message = recv_con.recv()
+                        if message.action == 'return':
+                            self.__return_queue.put((recv_con, message))
+                        else:
+                            self.__message_queue.put((recv_con, message))
+                    except (EOFError, OSError) as e:
+                        break
 
         # process messages in queue
         while not self.__message_queue.empty():
@@ -54,6 +60,9 @@ class Broker:
     def __process_message(self, client, message):
         if message.action == 'register_function':
             self.__register_function(client, message)
+            return
+        elif message.action == 'close':
+            self.__client_connections.remove(client)
             return
         self.__call_function(client, message)
 
@@ -65,7 +74,7 @@ class Broker:
 
         # check if function is already registered
         if name in self.__registered_functions:
-            exception = KeyError('Function already registered'),
+            exception = KeyError('Method already registered'),
             return_message = Message('return',
                                      exception,
                                      message.com_id)
@@ -88,7 +97,7 @@ class Broker:
         # check if function is registered
         if name not in self.__registered_functions:
             # send back KeyError (AttributeError better?)
-            exception = KeyError('Function not registered')
+            exception = AttributeError('No such method registered')
             return_msg = Message('return',
                                  exception,
                                  message.com_id)
@@ -101,6 +110,8 @@ class Broker:
 
         with self.__connection_lock:
             # wait for return
+            if not func_client.poll(self.POLL_TIMEOUT * 10):
+                raise Exception('No response')
             return_msg = func_client.recv()
             while (
                 return_msg.com_id != message.com_id and
@@ -111,6 +122,8 @@ class Broker:
                 else:
                     self.__message_queue.put(return_msg)
 
+                if not func_client.poll(self.POLL_TIMEOUT * 10):
+                    raise Exception('No response')
                 return_msg = func_client.recv()
         client.send(return_msg)
 

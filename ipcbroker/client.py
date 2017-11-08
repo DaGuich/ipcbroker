@@ -3,13 +3,19 @@ from threading import Lock
 
 from ipcbroker.broker import Broker
 from ipcbroker.message import Message
+from ipcbroker.threaded import Threaded
 
 
-class Client:
+class Client(Threaded):
     POLL_TIMEOUT = 0.1
 
     def __init__(self,
-                 broker: Broker):
+                 broker: Broker,
+                 name=None):
+        if name is None:
+            super().__init__()
+        else:
+            super().__init__(name)
         if not isinstance(broker, Broker):
             raise TypeError('broker is not a Broker: {}'.format(type(broker)))
 
@@ -35,13 +41,13 @@ class Client:
 
     def work(self):
         # check if new message has arrived
-        while self.__broker_con.poll(self.POLL_TIMEOUT):
-            try:
-                with self.__connection_lock:
+        try:
+            with self.__connection_lock:
+                while self.__broker_con.poll(self.POLL_TIMEOUT):
                     message = self.__broker_con.recv()
                     self.__message_queue.put(message)
-            except (EOFError, OSError):
-                pass
+        except (EOFError, OSError):
+            pass
 
         # process messages in message queue
         while not self.__message_queue.empty():
@@ -64,12 +70,16 @@ class Client:
             self.__broker_con.send(message)
 
             # wait for response
+            if not self.__broker_con.poll(self.POLL_TIMEOUT * 10):
+                raise Exception('No response')
             return_message = self.__broker_con.recv()
             while (
                 return_message.com_id != message.com_id and
                 return_message.action != 'return'
             ):
                 self.__message_queue.put(return_message)
+                if not self.__broker_con.poll(self.POLL_TIMEOUT * 10):
+                    raise Exception('No response')
                 return_message = self.__broker_con.recv()
 
         # if response says OK return True otherwise False
@@ -99,16 +109,20 @@ class Client:
                 self.__broker_con.send(message)
 
                 # wait for response
+                if not self.__broker_con.poll(self.POLL_TIMEOUT * 10):
+                    raise Exception('No response')
                 return_message = self.__broker_con.recv()
                 while (
                     return_message.action != 'return' and
                     return_message.com_id != message.com_id
                 ):
                     self.__message_queue.put(return_message)
+                    if not self.__broker_con.poll(self.POLL_TIMEOUT * 10):
+                        raise Exception('No response')
                     return_message = self.__broker_con.recv()
 
-            # return the payload
-            return return_message.payload
+                # return the payload
+                return return_message.payload
         return func
 
     def __process_message(self,
