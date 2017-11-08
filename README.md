@@ -2,7 +2,7 @@
 
 | Branch | Status |
 | ------ | ------ |
-| master | [![Codacy Badge](https://api.codacy.com/project/badge/Grade/a58ccc60625b437491ff5e523cad3f65)](https://www.codacy.com/app/matthias.gilch.mg/ipcbroker?utm_source=github.com&amp;utm_medium=referral&amp;utm_content=DaGuich/ipcbroker&amp;utm_campaign=Badge_Grade)|
+| master | [![Codacy Badge](https://api.codacy.com/project/badge/Grade/a58ccc60625b437491ff5e523cad3f65)](https://www.codacy.com/app/matthias.gilch.mg/ipcbroker?utm_source=github.com&amp;utm_medium=referral&amp;utm_content=DaGuich/ipcbroker&amp;utm_campaign=Badge_Grade) [![CircleCI](https://circleci.com/gh/DaGuich/ipcbroker/tree/master.svg?style=svg)](https://circleci.com/gh/DaGuich/ipcbroker/tree/master) |
 
 The IPC-Broker manages the communication between python multiprocessing processes. It provides an interface
 to call methods that are provided in another process. The usage is very simple.
