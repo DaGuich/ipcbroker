@@ -29,6 +29,9 @@ class Broker:
         self.__client_connections.append(send)
         return recv
 
+    def work(self):
+        self.__poll()
+
     def __poll(self):
         # read connections
         recv_cons = wait(self.__client_connections, self.POLL_TIMEOUT)
@@ -108,14 +111,6 @@ class Broker:
 
             return_msg = func_client.recv()
         client.send(return_msg)
-
-    @property
-    def _run_permission(self):
-        return self.__thread_run
-
-    @_run_permission.setter
-    def _run_permission(self, value):
-        self.__thread_run = value
 
     @property
     def n_clients(self):

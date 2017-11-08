@@ -132,6 +132,9 @@ class Client:
                                  message.com_id)
         self.__broker_con.send(return_message)
 
+    def work(self):
+        self.__poll()
+
     def __poll(self):
         # check if new message has arrived
         while self.__broker_con.poll(self.POLL_TIMEOUT):
