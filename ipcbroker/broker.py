@@ -30,9 +30,6 @@ class Broker:
         return recv
 
     def work(self):
-        self.__poll()
-
-    def __poll(self):
         # read connections
         recv_cons = wait(self.__client_connections, self.POLL_TIMEOUT)
 

@@ -30,6 +30,20 @@ class Client:
         # if not do a remote call via the broker
         return self.__remote_call(item)
 
+    def work(self):
+        # check if new message has arrived
+        while self.__broker_con.poll(self.POLL_TIMEOUT):
+            try:
+                message = self.__broker_con.recv()
+                self.__message_queue.put(message)
+            except (EOFError, OSError):
+                pass
+
+        # process messages in message queue
+        while not self.__message_queue.empty():
+            message = self.__message_queue.get()
+            self.__process_message(message)
+
     def register_function(self, name, callback):
         # check if the function is already locally registered
         if name in self.__registered_funcs:
@@ -131,20 +145,3 @@ class Client:
                                  return_value,
                                  message.com_id)
         self.__broker_con.send(return_message)
-
-    def work(self):
-        self.__poll()
-
-    def __poll(self):
-        # check if new message has arrived
-        while self.__broker_con.poll(self.POLL_TIMEOUT):
-            try:
-                message = self.__broker_con.recv()
-                self.__message_queue.put(message)
-            except (EOFError, OSError):
-                pass
-
-        # process messages in message queue
-        while not self.__message_queue.empty():
-            message = self.__message_queue.get()
-            self.__process_message(message)
