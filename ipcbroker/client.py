@@ -54,7 +54,7 @@ class Client(Threaded):
             message = self.__message_queue.get()
             self.__process_message(message)
 
-    def register_function(self, name, callback):
+    def register_function(self, name, callback, long_running=False):
         # check if the function is already locally registered
         if name in self.__registered_funcs:
             raise KeyError('Function already locally registered')
@@ -64,9 +64,14 @@ class Client(Threaded):
             raise TypeError('Callback is not callable')
 
         with self.__connection_lock:
+            if long_running:
+                message = Message('register_function',
+                                  name,
+                                  flags=['long_running'])
+            else:
+                message = Message('register_function',
+                                  name)
             # send register request to broker
-            message = Message('register_function',
-                              name)
             self.__broker_con.send(message)
 
             # wait for response
