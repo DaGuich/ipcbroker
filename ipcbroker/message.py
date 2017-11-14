@@ -9,12 +9,15 @@ class Message:
                  action: str,
                  payload,
                  com_id=None,
-                 flags=list()):
+                 flags=None):
         if com_id is None:
             self.__com_id = ''.join([random.choice(string.ascii_uppercase)
                                      for _ in range(self.COM_ID_LENGTH)])
         else:
             self.__com_id = com_id
+
+        if flags is None:
+            flags = list()
 
         if not isinstance(flags, list):
             raise TypeError('flags is not a list')
