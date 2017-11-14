@@ -75,16 +75,12 @@ class Client(Threaded):
             self.__broker_con.send(message)
 
             # wait for response
-            if not self.__broker_con.poll(self.POLL_TIMEOUT * 10):
-                raise Exception('No response')
             return_message = self.__broker_con.recv()
             while (
                 return_message.com_id != message.com_id and
                 return_message.action != 'return'
             ):
                 self.__message_queue.put(return_message)
-                if not self.__broker_con.poll(self.POLL_TIMEOUT * 10):
-                    raise Exception('No response')
                 return_message = self.__broker_con.recv()
 
             # if response says OK return True otherwise False
@@ -114,16 +110,12 @@ class Client(Threaded):
                 self.__broker_con.send(message)
 
                 # wait for response
-                if not self.__broker_con.poll(self.POLL_TIMEOUT * 10):
-                    raise Exception('No response')
                 return_message = self.__broker_con.recv()
                 while (
                     return_message.action != 'return' and
                     return_message.com_id != message.com_id
                 ):
                     self.__message_queue.put(return_message)
-                    if not self.__broker_con.poll(self.POLL_TIMEOUT * 10):
-                        raise Exception('No response')
                     return_message = self.__broker_con.recv()
 
                 # return the payload

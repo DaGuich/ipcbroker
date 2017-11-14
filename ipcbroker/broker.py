@@ -1,4 +1,5 @@
-from threading import Lock
+import logging
+from multiprocessing import Lock
 from multiprocessing import Pipe
 from multiprocessing.connection import Connection
 from multiprocessing.connection import wait
@@ -23,6 +24,8 @@ class Broker(Threaded):
         self.__return_queue = Queue()
 
         self.__connection_lock = Lock()
+
+        self.__logger = logging.getLogger(__name__)
 
     def register_client(self):
         """
@@ -49,12 +52,16 @@ class Broker(Threaded):
                         else:
                             self.__message_queue.put((recv_con, message))
                     except (EOFError, OSError):
+                        self.__logger.error('Error receiving from pipe')
                         break
 
-        # process messages in queue
-        while not self.__message_queue.empty():
-            client, message = self.__message_queue.get()
-            self.__process_message(client, message)
+        qsize = self.__message_queue.qsize()
+        if qsize > 0:
+            self.__logger.debug('{} messages queued'.format(qsize))
+            # process messages in queue
+            while not self.__message_queue.empty():
+                client, message = self.__message_queue.get()
+                self.__process_message(client, message)
 
     def __process_message(self, client, message):
         if message.action == 'register_function':
@@ -71,6 +78,10 @@ class Broker(Threaded):
         # function name is in payload
         name = message.payload
 
+        long_running = False
+        if 'long_running' in message.flags:
+            long_running = True
+
         # check if function is already registered
         if name in self.__registered_functions:
             exception = KeyError('Method already registered'),
@@ -81,7 +92,10 @@ class Broker(Threaded):
             return
 
         # register function and send OK back
-        self.__registered_functions[name] = client
+        self.__registered_functions[name] = {
+            'client': client,
+            'long_running': long_running
+        }
         return_message = Message('return',
                                  'OK',
                                  message.com_id)
@@ -104,27 +118,36 @@ class Broker(Threaded):
             return
 
         # get the appropriate method connection and send the request
-        func_client = self.__registered_functions[name]
+        func_client = self.__registered_functions[name]['client']
+        long_running = self.__registered_functions[name]['long_running']
         func_client.send(message)
 
-        with self.__connection_lock:
-            # wait for return
-            if not func_client.poll(self.POLL_TIMEOUT * 10):
-                raise Exception('No response')
-            return_msg = func_client.recv()
-            while (
-                return_msg.com_id != message.com_id and
-                return_msg.action != 'return'
-            ):
-                if return_msg.action == 'return':
-                    self.__return_queue.put(return_msg)
-                else:
-                    self.__message_queue.put(return_msg)
+        poll_timeout = self.POLL_TIMEOUT * 10
 
-                if not func_client.poll(self.POLL_TIMEOUT * 10):
+        try:
+            with self.__connection_lock:
+                # wait for return
+                if not long_running and not func_client.poll(poll_timeout):
                     raise Exception('No response')
                 return_msg = func_client.recv()
-        client.send(return_msg)
+                while (
+                    return_msg.com_id != message.com_id and
+                    return_msg.action != 'return'
+                ):
+                    if return_msg.action == 'return':
+                        self.__return_queue.put(return_msg)
+                    else:
+                        self.__message_queue.put(return_msg)
+
+                    if not long_running and not func_client.poll(poll_timeout):
+                        raise Exception('No response')
+                    return_msg = func_client.recv()
+                client.send(return_msg)
+        except Exception as exception:
+            exc_message = Message('return',
+                                  exception,
+                                  message.com_id)
+            client.send(exc_message)
 
     @property
     def n_clients(self):
