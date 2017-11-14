@@ -135,9 +135,9 @@ class Broker(Threaded):
                     return_msg.action != 'return'
                 ):
                     if return_msg.action == 'return':
-                        self.__return_queue.put(return_msg)
+                        self.__return_queue.put((func_client, return_msg))
                     else:
-                        self.__message_queue.put(return_msg)
+                        self.__message_queue.put((func_client, return_msg))
 
                     if not long_running and not func_client.poll(poll_timeout):
                         raise Exception('No response')
