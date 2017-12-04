@@ -22,6 +22,7 @@ class Broker(Threaded):
         self.__registered_functions = dict()
         self.__message_queue = Queue()
         self.__return_queue = Queue()
+        self.__open_messages = dict()
 
         self.__connection_lock = Lock()
 
@@ -54,6 +55,14 @@ class Broker(Threaded):
                     except (EOFError, OSError):
                         self.__logger.error('Error receiving from pipe')
                         break
+
+        qsize = self.__return_queue.qsize()
+        if qsize > 0:
+            while not self.__return_queue.empty():
+                client, message = self.__return_queue.get()
+                if message.com_id in self.__open_messages:
+                    self.__open_messages[message.com_id].send(message)
+                    del self.__open_messages[message.com_id]
 
         qsize = self.__message_queue.qsize()
         if qsize > 0:
@@ -121,6 +130,9 @@ class Broker(Threaded):
         func_client = self.__registered_functions[name]['client']
         long_running = self.__registered_functions[name]['long_running']
         func_client.send(message)
+        self.__open_messages[message.com_id] = client
+
+        return
 
         poll_timeout = self.POLL_TIMEOUT * 10
 

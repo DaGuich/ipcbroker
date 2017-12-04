@@ -99,8 +99,9 @@ class IpcBrokerTestCase(TestCase):
         self.assertEqual(cb.add(1, 2), 3)
         self.assertEqual(ca.sub(5, 2), 3)
 
-        with self.assertRaises(Exception):
-            ca.long()
+        # not used any more
+        # with self.assertRaises(Exception):
+        #     ca.long()
 
         ca.stop()
         cb.stop()
